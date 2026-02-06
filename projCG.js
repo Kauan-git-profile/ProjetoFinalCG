@@ -2,6 +2,22 @@ let faces;
 let projectionMatrix;
 let camZ;
 
+//PARÂMTROS DA CAMERA
+
+let camera = {
+  VRP: [0, 0, 0], //View Reference Point
+  P: [100, 150, 400], //Position
+  viewup: [0, 1, 0], //View Up Vector
+
+  //Parâmetros do volume de visão
+
+  SU: 200,
+  SV: 200,
+  dp: 600,
+  near: 1,
+  far: 1000,
+}
+
 function setup() {
   createCanvas(400, 400);
 
@@ -62,6 +78,11 @@ function setup() {
 
 function draw() {
   background(220);
+  noFill(); // Para ver através do cubo
+  stroke(0); // Linhas pretas
+
+  let viewMatrix = createViewMatrix();
+  let viewProjectionMatrix = multiplyMatrices(projectionMatrix, viewMatrix);
 
   //em cada face
   for (let face of faces) {
@@ -69,13 +90,18 @@ function draw() {
 
     //em cada vertice
     for (let vertx of face) {
-      let tmp = [...vertx];
-      tmp[2] += camZ; //translada o vertice para frente da camera
-      let projVrtx = multiplyMatrixVector(projectionMatrix, tmp.concat(1.0)); //adiciona a componente w = 1 para cada vertice
+      
+      //VÉRTICE NO sru
+      let vertex4D = [...vertx, 1.0]; // [x, y, z, 1]
+
+      //Aplicar transformação view mais projeção
+      let projVrtx = multiplyMatrixVector(viewProjectionMatrix, vertex4D);
 
       //normaliza o vertice projetado
-      let x = projVrtx[0] / projVrtx[3];
-      let y = projVrtx[1] / projVrtx[3];
+      let w = projVrtx[3];
+      let x = projVrtx[0] / w;
+      let y = projVrtx[1] / w;
+      let z = projVrtx[2] / w;
 
       //mudança de sistema de coordenadas (origem no centro da tela)
       x = (x + 1) * 0.5 * width;
@@ -103,4 +129,77 @@ function multiplyMatrixVector(matrix, vector) {
   }
 
   return result;
+}
+
+function multiplyMatrices(a, b) {
+    let result = [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0]
+    ];
+    
+    for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 4; j++) {
+            for (let k = 0; k < 4; k++) {
+                result[i][j] += a[i][k] * b[k][j];
+            }
+        }
+    }
+    
+    return result;
+}
+/*A View Matrix (matriz de visão) é a
+matriz que transforma o mundo para o 
+sistema de coordenadas da câmera.
+Alterar ela muda posição e orientação da câmera,
+sem precisar mover os objetos.*/ 
+function createViewMatrix() {
+  
+  
+  // Matriz de View: transforma do SRU para o SRD (Sistema de Referência da Câmera)
+
+  // Definindo os vetores da câmera U, V, N
+  let n = normalize(subtractVectors(camera.P, camera.VRP));  // Vetor N (para frente)
+  let u = normalize(crossProduct(camera.viewup, n));         // Vetor U (para direita)
+  let v = crossProduct(n, u);  // Vetor V (para cima)
+
+  // Criando a matriz de rotação
+  let rotationMatrix = [
+    [u[0], u[1], u[2], 0],
+    [v[0], v[1], v[2], 0],
+    [n[0], n[1], n[2], 0],
+    [0,    0,    0,    1]
+  ];
+
+  // Criando a matriz de translação, deve levar a câmera para a origem
+  let translationMatrix = [
+    [1, 0, 0, -camera.P[0]],
+    [0, 1, 0, -camera.P[1]],
+    [0, 0, 1, -camera.P[2]],
+    [0, 0, 0, 1]
+  ];
+
+  //Matriz de view
+
+  return multiplyMatrices(rotationMatrix, translationMatrix);
+
+}
+
+
+function subtractVectors(a, b) {
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function normalize(v) {
+    let length = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    return [v[0]/length, v[1]/length, v[2]/length];
+}
+
+function crossProduct(a, b) {
+    return [
+        a[1]*b[2] - a[2]*b[1],
+        a[2]*b[0] - a[0]*b[2],
+        a[0]*b[1] - a[1]*b[0]
+    ];
 }
